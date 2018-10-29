@@ -4,6 +4,7 @@ from tensorflow.contrib.layers import batch_norm
 from tensorflow.contrib.layers import fully_connected
 from tensorflow.contrib import rnn
 
+
 class Model():
 
     def __init__(self,
@@ -11,26 +12,23 @@ class Model():
                  is_train=True,
                  seed=9,
                  c_word_embed=32,
-                 q_word_embed=32,
-                 context_vocab_size = 124,
-                 question_vocab_size = 88,
-                 answer_vocab_size=159):
+                 q_word_embed=32):
 
         self.batch_size = config['batch_size']
         self.seed = seed
-        self.c_max_len = config['c_max_len'] # 20
-        self.s_max_len = config['s_max_len'] # 12
-        self.q_max_len = config['q_max_len'] # 12
+        self.c_max_len = config['c_max_len']
+        self.s_max_len = config['s_max_len']
+        self.q_max_len = config['q_max_len']
         self.mask_index = 0
         self.s_input_step = config['s_max_len']
-        self.s_hidden = config['s_hidden'] # 32
+        self.s_hidden = config['s_hidden']
         self.q_input_step = config['q_max_len']
-        self.q_hidden = config['q_hidden'] # 32
+        self.q_hidden = config['q_hidden']
         self.c_word_embed = c_word_embed
         self.q_word_embed = q_word_embed
-        self.context_vocab_size = context_vocab_size + 1  # consider masking
-        self.question_vocab_size = question_vocab_size + 1  # consider masking
-        self.answer_vocab_size = answer_vocab_size
+        self.context_vocab_size = config['context_vocab_size'] + 1  # consider masking
+        self.question_vocab_size = config['question_vocab_size'] + 1  # consider masking
+        self.answer_vocab_size = config['answer_vocab_size']
         self.context = tf.placeholder(
             dtype=tf.int32,
             shape=[self.batch_size, self.c_max_len, self.s_max_len],
@@ -73,29 +71,30 @@ class Model():
         self.embed_matrix()
         self.pred = self.build(is_train=is_train)
 
-        self.correct = tf.equal(tf.argmax(self.pred , axis=1), tf.argmax(self.answer, axis=1))
+        self.correct = tf.equal(tf.argmax(self.pred, axis=1), tf.argmax(self.answer, axis=1))
         self.accuracy = tf.reduce_mean(tf.cast(self.correct, tf.float32))
 
-        self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits = self.pred, labels = self.answer))
+        self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
+            logits=self.pred, labels=self.answer))
 
     def embed_matrix(self):
-        self.c_word_embed_matrix = tf.Variable(
-            tf.random_uniform(shape=[self.context_vocab_size, self.c_word_embed],
-                              minval=-1,
-                              maxval=1,
-                              seed= self.seed))
-        self.q_word_embed_matrix = tf.Variable(
-            tf.random_uniform(shape=[self.question_vocab_size, self.q_word_embed],
-                              minval=-1,
-                              maxval=1,
-                              seed=self.seed))
+        self.c_word_embed_matrix = tf.get_variable(
+            "c_word_embedding",
+            shape=[self.context_vocab_size, self.c_word_embed],
+            initializer=tf.random_uniform_initializer(minval=-1, maxval=1, seed=self.seed)
+        )
+        self.q_word_embed_matrix = tf.get_variable(
+            "q_word_embedding",
+            shape=[self.question_vocab_size, self.q_word_embed],
+            initializer=tf.random_uniform_initializer(minval=-1, maxval=1, seed=self.seed)
+        )
 
-    def contextLSTM(self, c, l, c_real_len, reuse = False, scope = "ContextLSTM"):
+    def contextLSTM(self, c, l, c_real_len, reuse=False, scope="ContextLSTM"):
 
         def sentenceLSTM(s,
                          s_real_len,
-                         reuse = reuse,
-                         scope = "sentenceLSTM"):
+                         reuse=reuse,
+                         scope="sentenceLSTM"):
             """
             embedding sentence
 
@@ -107,13 +106,13 @@ class Model():
                 embedded_s: embedded sentence, shape = [batch_size*20, 32]
             """
             embedded_sentence_word = tf.nn.embedding_lookup(self.c_word_embed_matrix, s)
-            s_input = tf.unstack(embedded_sentence_word, num = self.s_max_len, axis = 1)
-            lstm_cell = rnn.BasicLSTMCell(self.s_hidden, reuse = reuse)
-            outputs, _ = rnn.static_rnn(lstm_cell, s_input, dtype = tf.float32, scope = scope)
+            s_input = tf.unstack(embedded_sentence_word, num=self.s_max_len, axis=1)
+            lstm_cell = rnn.BasicLSTMCell(self.s_hidden, reuse=reuse)
+            outputs, _ = rnn.static_rnn(lstm_cell, s_input, dtype=tf.float32, scope=scope)
 
             outputs = tf.stack(outputs)
-            outputs = tf.transpose(outputs, [1,0,2])
-            index = tf.range(0, self.batch_size* self.c_max_len) * (self.s_max_len) + (s_real_len - 1)
+            outputs = tf.transpose(outputs, [1, 0, 2])
+            index = tf.range(0, self.batch_size * self.c_max_len) * (self.s_max_len) + (s_real_len - 1)
             outputs = tf.gather(tf.reshape(outputs, [-1, self.s_hidden]), index)
             return outputs
 
@@ -127,17 +126,17 @@ class Model():
             tagged_c_objects: list of embedded sentence + label, shape = [batch_size, 52] 20개
             len(tagged_c_objects) = 20
         """
-        sentences = tf.reshape(c, shape = [-1, self.s_max_len])
-        real_lens = tf.reshape(c_real_len, shape= [-1])
-        labels = tf.reshape(l, shape = [-1, self.c_max_len])
+        sentences = tf.reshape(c, shape=[-1, self.s_max_len])
+        real_lens = tf.reshape(c_real_len, shape=[-1])
+        labels = tf.reshape(l, shape=[-1, self.c_max_len])
 
-        s_embedded = sentenceLSTM(sentences, real_lens, reuse = reuse)
+        s_embedded = sentenceLSTM(sentences, real_lens, reuse=reuse)
         c_embedded = tf.concat([s_embedded, labels], axis=1)
-        c_embedded = tf.reshape(c_embedded, shape = [self.batch_size, self.c_max_len, self.c_max_len + self.c_word_embed])
+        c_embedded = tf.reshape(c_embedded, shape=[self.batch_size, self.c_max_len, self.c_max_len + self.s_hidden])
         tagged_c_objects = tf.unstack(c_embedded, axis=1)
         return tagged_c_objects
 
-    def questionLSTM(self, q, q_real_len, reuse = False, scope= "questionLSTM"):
+    def questionLSTM(self, q, q_real_len, reuse=False, scope="questionLSTM"):
         """
         Args
             q: zero padded qeustions, shape=[batch_size, q_max_len]
@@ -147,12 +146,12 @@ class Model():
             embedded_q: embedded questions, shape = [batch_size, q_hidden(32)]
         """
         embedded_q_word = tf.nn.embedding_lookup(self.q_word_embed_matrix, q)
-        q_input = tf.unstack(embedded_q_word, num = self.q_max_len, axis=1)
-        lstm_cell = rnn.BasicLSTMCell(self.q_hidden, reuse = reuse)
-        outputs, _ = rnn.static_rnn(lstm_cell, q_input, dtype = tf.float32, scope = scope)
+        q_input = tf.unstack(embedded_q_word, num=self.q_max_len, axis=1)
+        lstm_cell = rnn.BasicLSTMCell(self.q_hidden, reuse=reuse)
+        outputs, _ = rnn.static_rnn(lstm_cell, q_input, dtype=tf.float32, scope=scope)
 
         outputs = tf.stack(outputs)
-        outputs = tf.transpose(outputs, [1,0,2])
+        outputs = tf.transpose(outputs, [1, 0, 2])
         index = tf.range(0, self.batch_size) * (self.q_max_len) + (q_real_len - 1)
         outputs = tf.gather(tf.reshape(outputs, [-1, self.s_hidden]), index)
         return outputs
@@ -177,18 +176,18 @@ class Model():
 
         return tf.concat(RN_inputs, axis=0)
 
-    def batch_norm_relu(self, inputs, output_shape, phase = True, scope = None, activation = True):
+    def batch_norm_relu(self, inputs, output_shape, phase=True, scope=None, activation=True):
         with tf.variable_scope(scope):
-            h1 = fully_connected(inputs, output_shape, activation_fn= None, scope ="dense")
-            h2 = batch_norm(h1, decay = 0.95, center = True, scale = True,
-                            is_training= phase, scope = 'bn', updates_collections=None)
+            h1 = fully_connected(inputs, output_shape, activation_fn=None, scope="dense")
+            h2 = batch_norm(h1, decay=0.95, center=True, scale=True,
+                            is_training=phase, scope='bn', updates_collections=None)
             if activation:
                 out = tf.nn.relu(h2, 'relu')
             else:
                 out = h2
             return out
 
-    def g_theta(self, RN_input, scope='g_theta', reuse = True, phase = True):
+    def g_theta(self, RN_input, scope='g_theta', reuse=True, phase=True):
         """
         Args
             RN_input: [o_i, o_j, q], shape = [batch_size*190, 136]
@@ -197,35 +196,35 @@ class Model():
             g_output: shape = [190, batch_size, 256]
         """
         input_dim = RN_input.shape[1]
-        g_units = [256,256,256,256]
-        with tf.variable_scope(scope, reuse = reuse) as scope:
-            g_1 = self.batch_norm_relu(RN_input, g_units[0], scope= 'g_1', phase = phase)
+        g_units = [256, 256, 256, 256]
+        with tf.variable_scope(scope, reuse=reuse) as scope:
+            g_1 = self.batch_norm_relu(RN_input, g_units[0], scope='g_1', phase=phase)
             g_2 = self.batch_norm_relu(g_1, g_units[1], scope='g_2', phase=phase)
             g_3 = self.batch_norm_relu(g_2, g_units[2], scope='g_3', phase=phase)
             g_4 = self.batch_norm_relu(g_3, g_units[3], scope='g_4', phase=phase)
-        g_output = tf.reshape(g_4, shape= [-1, self.batch_size, g_units[3]])
+        g_output = tf.reshape(g_4, shape=[-1, self.batch_size, g_units[3]])
         return g_output
 
-    def f_phi(self, g, scope = "f_phi", reuse = True , phase = True):
+    def f_phi(self, g, scope="f_phi", reuse=True, phase=True):
         """
         Args
             g: g_theta result, shape = [190, batch_size, 256]
 
         Returns
-            f_output: shape = [batch_size, 159]
+            f_output: shape = [batch_size, answer_vocab_size] 159]
         """
         f_input = tf.reduce_sum(g, axis=0)
-        f_units = [256,512,159]
-        with tf.variable_scope(scope, reuse = reuse) as scope:
-            f_1 = self.batch_norm_relu(f_input, f_units[0], scope = "f_1", phase = phase)
-            f_2 = self.batch_norm_relu(f_1, f_units[1], scope = "f_2", phase = phase)
-            f_3 = self.batch_norm_relu(f_2, f_units[2], scope = "f_3", phase = phase)
+        f_units = [256, 512, self.answer_vocab_size]
+        with tf.variable_scope(scope, reuse=reuse) as scope:
+            f_1 = self.batch_norm_relu(f_input, f_units[0], scope="f_1", phase=phase)
+            f_2 = self.batch_norm_relu(f_1, f_units[1], scope="f_2", phase=phase)
+            f_3 = self.batch_norm_relu(f_2, f_units[2], scope="f_3", phase=phase)
         return f_3
 
-    def build(self, is_train = True):
-        embedded_c = self.contextLSTM(self.context, self.label, self.context_real_len, reuse = None)
-        embedded_q = self.questionLSTM(self.question, self.question_real_len, reuse = None)
+    def build(self, is_train=True):
+        embedded_c = self.contextLSTM(self.context, self.label, self.context_real_len, reuse=None)
+        embedded_q = self.questionLSTM(self.question, self.question_real_len, reuse=None)
         RN_input = self.convert_to_RN_input(embedded_c, embedded_q)
-        f_input = self.g_theta(RN_input, reuse = None, phase = self.is_training)
-        pred = self.f_phi(f_input, reuse = None, phase = self.is_training)
+        f_input = self.g_theta(RN_input, reuse=None, phase=self.is_training)
+        pred = self.f_phi(f_input, reuse=None, phase=self.is_training)
         return pred

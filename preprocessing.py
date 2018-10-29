@@ -5,59 +5,63 @@ import re
 import sys
 import argparse
 
+
+class FileNotFoundError(OSError):
+    pass
+
+
 class Preprocess():
-
-
-    def __init__(self, path_to_babi):
-        # path_to_babi example: '././babi_original'
-        self.path_to_babi = os.path.join(path_to_babi, "tasks_1-20_v1-2/en-valid-10k")
+    def __init__(self, path_to_dataset, c_max_len):
+        # path_to_dataset example: '././babi_original'
+        self.path_to_dataset = path_to_dataset
         self.train_paths = None
         self.val_paths = None
         self.test_paths = None
-        self.path_to_processed = "./babi_processed"
+        self.all_paths = None
         self._c_word_set = set()
         self._q_word_set = set()
         self._a_word_set = set()
         self._cqa_word_set = set()
-        self.c_max_len = 20
+        self._all_word_set = set()
+        self.c_max_len = c_max_len
         self.s_max_len = 0
         self.q_max_len = 0
         self.mask_index = 0
 
-    def set_path(self):
-        """
-        set list of train, val, and test dataset paths
+    def set_path(self, path_to_dataset, all_paths_to_babi):
+        """Set list of train, val, and test dataset paths."""
+        self.path_to_dataset = path_to_dataset
 
-        Returns
-            train_paths: list of train dataset paths for all task 1 to 20
-            val_paths: list of val dataset paths for all task 1 to 20
-            test_paths: list of test dataset paths for all task 1 to 20
-        """
         train_paths = []
         val_paths = []
-        test_paths= []
-        for dirpath, dirnames, filenames in os.walk(self.path_to_babi):
+        test_paths = []
+        for dirpath, dirnames, filenames in os.walk(path_to_dataset):
             for filename in filenames:
-                if 'train' in filename:
-                    train_paths.append(os.path.join(dirpath, filename))
-                elif 'val' in filename:
-                    val_paths.append(os.path.join(dirpath, filename))
+                if filename.endswith('.txt'):
+                    if 'train' in filename:
+                        train_paths.append(os.path.join(dirpath, filename))
+                    elif 'val' in filename:
+                        val_paths.append(os.path.join(dirpath, filename))
+                    else:
+                        assert 'test' in filename
+                        test_paths.append(os.path.join(dirpath, filename))
                 else:
-                    test_paths.append(os.path.join(dirpath, filename))
+                    print("Ignored file: {}".format(filename))
         self.train_paths = sorted(train_paths)
         self.val_paths = sorted(val_paths)
         self.test_paths = sorted(test_paths)
 
+        all_paths = []
+        for dirpath, dirnames, filenames in os.walk(all_paths_to_babi):
+            for filename in filenames:
+                if filename.endswith('.txt'):
+                    all_paths.append(os.path.join(dirpath, filename))
+                else:
+                    print("Ignored file: {}".format(filename))
+        self.all_paths = sorted(all_paths)
+
     def _split_paragraphs(self, path_to_file):
-        """
-        split into paragraphs as babi dataset consists of multiple 1~n sentences
-
-        Args
-            file_path: path of the data
-
-        Returns
-            paragraphs: list of paragraph
-        """
+        """Split into paragraphs."""
         with open(path_to_file, 'r') as f:
             babi = f.readlines()
         paragraph = []
@@ -72,14 +76,13 @@ class Preprocess():
             paragraph.append(d[mark:])
         return paragraphs
 
-    def _split_clqa(self, paragraphs, show_print= True):
-        """
-        for each paragraph, split into context, label, question and answer
+    def _split_clqa(self, paragraphs, show_print=True):
+        """For each paragraph, split into context, label, question and answer.
 
-        Args
+        Args:
             paragraphs: list of paragraphs
 
-        Returns
+        Returns:
             context: list of contexts
             label: list of labels
             question: list of questions
@@ -93,6 +96,8 @@ class Preprocess():
             for i, sent in enumerate(paragraph):
                 if '?' in sent:
                     related_para = [para.strip().lower() for para in paragraph[:i] if '?' not in para][::-1]
+                    # Get rid of tab symbol
+                    related_para = [para.split('\t')[0] for para in related_para]
                     if len(related_para) > 20:
                         related_para = related_para[:20]
                     context.append(related_para)
@@ -113,20 +118,19 @@ class Preprocess():
                 print("the number of labels: {}".format(len(label)))
         return context, label, question, answer
 
-    def split_all_clqa(self, paths, show_print= True):
-        """
-        merge all 20 babi tasks into one dataset
+    def split_all_clqa(self, paths, show_print=True):
+        """Merge all tasks into one dataset.
 
-        Args
-            paths: list of path of 1 to 20 task dataset
+        Args:
+            paths: list of path to tasks
 
-        Returns
-            contexts: list of contexts of all 20 tasks
-            labels: list of labels of all 20 tasks
-            questions: list of questions of all 20 tasks
-            answers: list of answers of all 20 tasks
+        Returns:
+            contexts: list of contexts of all tasks
+            labels: list of labels of all tasks
+            questions: list of questions of all tasks
+            answers: list of answers of all tasks
         """
-        if paths == None:
+        if paths is None:
             print('path is None, run set_path() first!')
         else:
             contexts = []
@@ -146,43 +150,54 @@ class Preprocess():
                 answers.extend(answer)
             return contexts, labels, questions, answers
 
-    def _set_word_set(self):
-        c_word_set = set()
-        q_word_set = set()
-        a_word_set = set()
-        train_context, train_label, train_question, train_answer = self.split_all_clqa(self.train_paths, show_print=False)
-        val_context, val_label, val_question, val_answer = self.split_all_clqa(self.val_paths, show_print=False)
-        test_context, test_label, test_question, test_answer = self.split_all_clqa(self.test_paths, show_print=False)
-        list_of_context = [train_context, val_context, test_context]
-        list_of_question = [train_question, val_question, test_question]
-        list_of_answer = [train_answer, val_answer, test_answer]
-        for list_ in list_of_context:
-            for para in list_:
+    def set_word_set(self, word_set_path):
+
+        try:
+            c_word_set, q_word_set, a_word_set = np.load(word_set_path)
+
+        except Exception as e:
+            # Create the word set from the training, validation, and test data
+            c_word_set = set()
+            q_word_set = set()
+            a_word_set = set()
+
+            # Global vocabulary across multiple datasets
+            all_contexts, all_labels, all_questions, all_answers = self.split_all_clqa(
+                self.all_paths, show_print=False)
+
+            for para in all_contexts:
                 for sent in para:
                     sent = sent.replace(".", " .")
                     sent = sent.replace("?", " ?")
                     sent = sent.split()
                     c_word_set.update(sent)
-        for list_ in list_of_question:
-            for sent in list_:
+
+            for sent in all_questions:
                 sent = sent.replace(".", " .")
                 sent = sent.replace("?", " ?")
                 sent = sent.split()
                 q_word_set.update(sent)
-        for answers in list_of_answer:
-            for answer in answers:
+
+            for answer in all_answers:
                 answer = answer.split(',')
                 a_word_set.update(answer)
-        a_word_set.add(',')
+
+            a_word_set.add(',')
+
+            # Save the word set if requested
+            if word_set_path is not None and isinstance(e, FileNotFoundError):
+                np.save(word_set_path, (c_word_set, q_word_set, a_word_set))
+
         self._c_word_set = c_word_set
         self._q_word_set = q_word_set
         self._a_word_set = a_word_set
         self._cqa_word_set = c_word_set.union(q_word_set).union(a_word_set)
+        self._qa_word_set = c_word_set.union(q_word_set).union(a_word_set)
 
     def _index_context(self, contexts):
         c_word_index = dict()
         for i, word in enumerate(self._c_word_set):
-            c_word_index[word] = i+1 # index 0 for zero padding
+            c_word_index[word] = i+1  # index 0 for zero padding
         indexed_cs = []
         for context in contexts:
             indexed_c = []
@@ -206,7 +221,7 @@ class Preprocess():
     def _index_question(self, questions):
         q_word_index = dict()
         for i, word in enumerate(self._q_word_set):
-            q_word_index[word] = i+1 # index 0 for zero padding
+            q_word_index[word] = i+1  # index 0 for zero padding
         indexed_qs = []
         for sentence in questions:
             sentence = sentence.replace(".", " .")
@@ -239,11 +254,6 @@ class Preprocess():
                 indexed_a = a_word_index[answer]
                 indexed_as.append(indexed_a)
 
-        if not os.path.exists(self.path_to_processed):
-            os.makedirs(self.path_to_processed)
-
-        with open(os.path.join(self.path_to_processed, 'answer_word_dict.pkl'), 'wb') as f:
-            pickle.dump(a_word_dict, f)
         return indexed_as
 
     def masking(self, context_index, label_index, question_index):
@@ -273,24 +283,21 @@ class Preprocess():
             question_real_len.append(len(q))
             question_masked_tmp = np.array(np.append(q, [self.mask_index]*diff_q, axis=0))
             question_masked.append(question_masked_tmp.tolist())
-            
+
             diff_l = self.c_max_len - len(l)
-            label_masked_tmp = np.append(l, np.zeros((diff_l, self.c_max_len)), axis= 0)
+            label_masked_tmp = np.append(l, np.zeros((diff_l, self.c_max_len)), axis=0)
             label_masked.append(label_masked_tmp.tolist())
-            context_real_length_tmp.extend([0]*diff_l)
+            context_real_length_tmp.extend([0] * diff_l)
             context_real_len.append(context_real_length_tmp)
+
         return context_masked, question_masked, label_masked, context_real_len, question_real_len
 
+    def load(self, mode, path):
 
-    def load(self, mode):
-        if mode == 'train':
-            path = self.train_paths
-        elif mode == 'val':
-            path = self.val_paths
-        else:
-            path = self.test_paths
+        assert mode in ['train', 'val', 'test']
 
-        contexts, labels, questions, answers = self.split_all_clqa(path)
+        contexts, labels, questions, answers = self.split_all_clqa([path])
+
         context_index = self._index_context(contexts)
         label_index = self._index_label(labels)
         question_index = self._index_question(questions)
@@ -307,11 +314,26 @@ class Preprocess():
                 if len(question) > self.q_max_len:
                     self.q_max_len = len(question)
 
+            assert self.s_max_len > 0
+            assert self.q_max_len > 0
+
+            self.path_to_processed = '_'.join([
+                self.output_path,
+                str(self.c_max_len),
+                str(self.s_max_len),
+                str(self.q_max_len),
+                str(len(self._c_word_set)),
+                str(len(self._q_word_set)),
+                str(len(self._a_word_set)),
+            ])
+            if not os.path.exists(self.path_to_processed):
+                os.makedirs(self.path_to_processed)
+
         context_masked, question_masked, label_masked, context_real_len, question_real_len = self.masking(context_index, label_index, question_index)
         # check masking
         cnt = 0
         for c, q, l in zip(context_masked, question_masked, label_masked):
-            for context in c :
+            for context in c:
                 if (len(context) != self.s_max_len) | (len(q) != self.q_max_len) | (len(l) != self.c_max_len):
                     cnt += 1
         if cnt == 0:
@@ -319,49 +341,48 @@ class Preprocess():
         else:
             print("Masking process error")
         dataset = (question_masked, answer_index, context_masked, label_masked, context_real_len, question_real_len)
-        if not os.path.exists(self.path_to_processed):
-            os.makedirs(self.path_to_processed)
-        with open(os.path.join(self.path_to_processed, mode + '_dataset.pkl'), 'wb') as f:
+
+        dump_path = os.path.basename(path) + '.pkl'
+        with open(os.path.join(self.path_to_processed, dump_path), 'wb') as f:
             pickle.dump(dataset, f)
 
+
 def get_args_parser():
-    """
-    python preprocessing.py --path ../ --batch_size 64 --hidden_units 32 --learning_rate 2e-4 --iter_time 150 --display_step 100
-    :return:
-    """
     _parser = argparse.ArgumentParser()
-    _parser.add_argument('--path', '--path_to_babi')
-    _parser.add_argument('--batch_size', '--batch_size')
-    _parser.add_argument('--hidden_units', '--hidden_units')
-    _parser.add_argument('--learning_rate', '--learning_rate')
-    _parser.add_argument('--iter_time', '--iter_time')
-    _parser.add_argument('--display_step', '--display_step')
+    _parser.add_argument('--path', required=True)
+    _parser.add_argument('--c_max_len', type=int, required=True)
+    _parser.add_argument('--all', '--all_paths', required=True)
+    _parser.add_argument('--word_set', '--word_set_path', default=None,
+                         help='Optional word set. If not specified, generated from'
+                              'the union of training, validation, and test data.')
+    _parser.add_argument('--output_path', required=True)
+
     return _parser
 
+
 def default_write(f, string, default_value):
-    if string == None:
+    if string is None:
         f.write(str(default_value) + "\t")
     else:
         f.write(str(string) + "\t")
 
+
 def main():
     args = get_args_parser().parse_args()
-    preprocess = Preprocess(args.path)
-    preprocess.set_path()
-    preprocess._set_word_set()
-    preprocess.load(mode='train')
-    preprocess.load(mode='val')
-    preprocess.load(mode='test')
 
-    with open(os.path.join('config.txt'), 'w') as f:
-        f.write(str(preprocess.c_max_len)+"\t")
-        f.write(str(preprocess.s_max_len)+"\t")
-        f.write(str(preprocess.q_max_len)+"\t")
-        f.write(str(preprocess.path_to_processed)+'\t')
-        default_write(f, args.batch_size, 64)
-        default_write(f, args.hidden_units, 32)
-        default_write(f, args.learning_rate, 2e-4)
-        default_write(f, args.iter_time, 150)
-        default_write(f, args.display_step, 100)
+    preprocess = Preprocess(args.path, args.c_max_len)
+
+    preprocess.output_path = args.output_path
+    preprocess.set_path(args.path, args.all)
+    preprocess.set_word_set(args.word_set)
+
+    for train_path in preprocess.train_paths:
+        preprocess.load('train', train_path)
+    for val_path in preprocess.val_paths:
+        preprocess.load('val', val_path)
+    for test_path in preprocess.test_paths:
+        preprocess.load('test', test_path)
+
+
 if __name__ == '__main__':
     main()
