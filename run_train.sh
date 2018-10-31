@@ -8,8 +8,8 @@ NV_GPU=0 nvidia-docker run -t \
   sh -c \
   "export PYTHONPATH=/src/ && python ../src/train.py \
   --save_path ../src/results  \
-  --train_data_path ../src/preprocessed/tom_easy_noise_13_8_11_130_75_31  \
-  --test_data_path ../src/preprocessed/tom_easy_noise_13_8_11_130_75_31  \
+  --train_data_path ../src/preprocessed/tom_easy_noise_13_8_11_149_86_39  \
+  --test_data_path ../src/preprocessed/tom_easy_noise_13_8_11_149_86_39  \
   --batch_size 32 \
   --q_hidden_size 16 \
   --s_hidden_size 16 \
@@ -26,8 +26,8 @@ NV_GPU=1 nvidia-docker run -t \
   sh -c \
   "export PYTHONPATH=/src/ && python ../src/train.py \
   --save_path ../src/results  \
-  --train_data_path ../src/preprocessed/tom_noise_47_8_11_130_75_31 \
-  --test_data_path ../src/preprocessed/tom_noise_47_8_11_130_75_31 \
+  --train_data_path ../src/preprocessed/tom_noise_47_8_11_149_86_39 \
+  --test_data_path ../src/preprocessed/tom_noise_47_8_11_149_86_39 \
   --batch_size 32 \
   --q_hidden_size 16 \
   --s_hidden_size 16 \
@@ -44,8 +44,8 @@ NV_GPU=2 nvidia-docker run -t \
   sh -c \
   "export PYTHONPATH=/src/ && python ../src/train.py \
   --save_path ../src/results  \
-  --train_data_path ../src/preprocessed/tom_easy_noise_at_test_13_8_11_130_75_31 \
-  --test_data_path ../src/preprocessed/tom_easy_noise_at_test_13_8_11_130_75_31 \
+  --train_data_path ../src/preprocessed/tom_easy_noise_at_test_14_8_11_149_86_39 \
+  --test_data_path ../src/preprocessed/tom_easy_noise_at_test_14_8_11_149_86_39 \
   --batch_size 32 \
   --q_hidden_size 16 \
   --s_hidden_size 16 \
@@ -62,8 +62,8 @@ NV_GPU=2 nvidia-docker run -t \
   sh -c \
   "export PYTHONPATH=/src/ && python ../src/train.py \
   --save_path ../src/results  \
-  --train_data_path ../src/preprocessed/tom_noise_at_test_40_8_11_130_75_31 \
-  --test_data_path ../src/preprocessed/tom_noise_at_test_40_8_11_130_75_31 \
+  --train_data_path ../src/preprocessed/tom_noise_at_test_40_8_11_149_86_39 \
+  --test_data_path ../src/preprocessed/tom_noise_at_test_40_8_11_149_86_39 \
   --batch_size 32 \
   --q_hidden_size 16 \
   --s_hidden_size 16 \
@@ -80,8 +80,8 @@ NV_GPU=3 nvidia-docker run -t \
   sh -c \
   "export PYTHONPATH=/src/ && python ../src/train.py \
   --save_path ../src/results  \
-  --train_data_path ../src/preprocessed/tom_easy_no_noise_8_8_11_130_75_31 \
-  --test_data_path ../src/preprocessed/tom_easy_no_noise_8_8_11_130_75_31 \
+  --train_data_path ../src/preprocessed/tom_easy_no_noise_8_8_11_149_86_39 \
+  --test_data_path ../src/preprocessed/tom_easy_no_noise_8_8_11_149_86_39 \
   --batch_size 32 \
   --q_hidden_size 16 \
   --s_hidden_size 16 \
@@ -98,8 +98,8 @@ NV_GPU=3 nvidia-docker run -t \
   sh -c \
   "export PYTHONPATH=/src/ && python ../src/train.py \
   --save_path ../src/results  \
-  --train_data_path ../src/preprocessed/tom_no_noise_40_8_11_130_75_31 \
-  --test_data_path ../src/preprocessed/tom_no_noise_40_8_11_130_75_31 \
+  --train_data_path ../src/preprocessed/tom_no_noise_40_8_11_149_86_39 \
+  --test_data_path ../src/preprocessed/tom_no_noise_40_8_11_149_86_39 \
   --batch_size 32 \
   --q_hidden_size 16 \
   --s_hidden_size 16 \

@@ -163,6 +163,9 @@ def main(args):
 
     with tf.Graph().as_default():
 
+        config_proto = tf.ConfigProto()
+        config_proto.gpu_options.allow_growth = True
+        sess = tf.Session(config=config_proto)
         sess = tf.Session()
         start_time = time()
         with sess.as_default():
